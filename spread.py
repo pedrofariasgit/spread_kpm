@@ -44,6 +44,7 @@ def load_users():
 
 # Função de login
 def login_page():
+    add_logo()  # Adiciona a logo na página de login
     st.title("Login")
 
     # Carrega os dados de usuários
@@ -66,6 +67,7 @@ def login_page():
                 st.error("Senha incorreta")
         else:
             st.error("Usuário não encontrado")
+
 
 
 # Função para converter a data inserida no formato brasileiro
