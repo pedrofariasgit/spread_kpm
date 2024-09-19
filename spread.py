@@ -78,10 +78,10 @@ def conectar_bd():
 
 # Função para calcular os campos necessários
 def calcular_campos(valor, taxa_rec_cliente, taxa_pgto_banco):
-    abs_valor = abs(valor)
-    fator_conversao = taxa_rec_cliente - taxa_pgto_banco
-    conversao = abs_valor * taxa_rec_cliente
-    ganho = fator_conversao * abs_valor
+    abs_valor = round(abs(valor), 2)  # Formata com 2 casas decimais
+    fator_conversao = round(taxa_rec_cliente - taxa_pgto_banco, 4)  # 4 casas para fator de conversão
+    conversao = round(abs_valor * taxa_rec_cliente, 2)
+    ganho = round(fator_conversao * abs_valor, 2)  # Formata ganho com 2 casas decimais
     return abs_valor, conversao, fator_conversao, ganho
 
 # Função para inserir os dados da planilha Excel no banco de dados
@@ -99,7 +99,7 @@ def inserir_dados_excel(conn, df):
                 row['data'],
                 row['agente'],
                 row['moeda'],
-                row['valor'],
+                round(row['valor'], 2),  # Armazena com 2 casas decimais
                 abs_valor,
                 conversao,
                 row['taxa_rec_cliente'],
