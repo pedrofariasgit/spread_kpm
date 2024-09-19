@@ -3,7 +3,7 @@ import streamlit as st
 import psycopg2
 from psycopg2 import sql
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime
 import json
 import base64
 
@@ -53,28 +53,23 @@ def login_page():
         if username in usernames:
             user = next(user for user in users if user['username'] == username)
             if user['password'] == password:
-                # Define o estado de login e atualiza os query params
                 st.session_state['logged_in'] = True
-                st.query_params.logged_in = "True"
+                st.session_state['page'] = 'main'
+                st.query_params.from_dict({"logged_in": "True"})
             else:
                 st.error("Senha incorreta")
         else:
             st.error("Usuário não encontrado")
 
-# Função para verificar o estado de login
-def check_login_from_url():
-    if st.query_params.get("logged_in") == "True":
-        st.session_state['logged_in'] = True
-
 # Função para conectar ao banco de dados PostgreSQL
 def conectar_bd():
     try:
         conn = psycopg2.connect(
-            host=os.getenv("DB_HOST"),
-            port=os.getenv("DB_PORT"),
-            database=os.getenv("DB_NAME"),
-            user=os.getenv("DB_USER"),
-            password=os.getenv("DB_PASSWORD")
+            host=os.getenv("DB_HOST", "89.117.17.6"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "kpm_spread"),
+            user=os.getenv("DB_USER", "kpm"),
+            password=os.getenv("DB_PASSWORD", "@Kpm<102030>")
         )
         return conn
     except Exception as e:
@@ -222,6 +217,11 @@ def main_page():
     uploaded_file = st.file_uploader("Escolha um arquivo Excel", type="xlsx")
     if uploaded_file:
         processar_excel(uploaded_file)
+
+# Verifica o login via URL
+def check_login_from_url():
+    if st.query_params.get("logged_in") == ["True"]:
+        st.session_state['logged_in'] = True
 
 # Gerencia as páginas do aplicativo
 if 'logged_in' not in st.session_state:
