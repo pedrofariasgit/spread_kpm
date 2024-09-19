@@ -14,17 +14,15 @@ def get_base64_image(image_path):
 
 # Função para adicionar a logo
 def add_logo():
-    # Usar caminho relativo, igual ao users.json
     logo_path = os.path.join(os.path.dirname(__file__), 'logo.png')
-
-    logo_base64 = get_base64_image(logo_path)  # Usa o caminho relativo
+    logo_base64 = get_base64_image(logo_path)
     st.markdown(
         f"""
         <style>
         .logo {{
             position: fixed;
             top: 50px;
-            left: 0px;
+            left: 10px;
             padding: 10px;
         }}
         </style>
@@ -41,13 +39,10 @@ def load_users():
     with open(file_path, 'r') as f:
         return json.load(f)
 
-
 # Função de login
 def login_page():
-    add_logo()  # Adiciona a logo na página de login
+    add_logo()
     st.title("Login")
-
-    # Carrega os dados de usuários
     users = load_users()
     usernames = [user['username'] for user in users]
 
@@ -56,114 +51,35 @@ def login_page():
 
     if st.button("Entrar"):
         if username in usernames:
-            # Verifica a senha
             user = next(user for user in users if user['username'] == username)
             if user['password'] == password:
+                # Define o estado de login e atualiza os query params
                 st.session_state['logged_in'] = True
-                st.session_state['page'] = 'main'
-                # Força a atualização dos parâmetros para simular uma recarga
-                st.query_params.from_dict({"logged_in": "True"})
+                st.query_params.logged_in = "True"
             else:
                 st.error("Senha incorreta")
         else:
             st.error("Usuário não encontrado")
 
-
-
-# Função para converter a data inserida no formato brasileiro
-def converter_data(data_str):
-    if data_str:  # Apenas tenta converter se houver uma data informada
-        try:
-            return datetime.strptime(data_str, "%d/%m/%Y")
-        except ValueError:
-            st.error("Data inválida! Use o formato dd/mm/aaaa.")
-            return None
-    return None
-
-# Função para formatar a data ao carregar para o formulário de edição
-def formatar_data_para_formulario(data_valor):
-    # Se for um objeto datetime.date ou datetime, converta para string
-    if isinstance(data_valor, (datetime, date)):
-        return data_valor.strftime('%d/%m/%Y')
-    return data_valor
+# Função para verificar o estado de login
+def check_login_from_url():
+    if st.query_params.get("logged_in") == "True":
+        st.session_state['logged_in'] = True
 
 # Função para conectar ao banco de dados PostgreSQL
 def conectar_bd():
     try:
         conn = psycopg2.connect(
-            host="89.117.17.6",
-            port="5432",
-            database="kpm_spread",
-            user="kpm",
-            password="@Kpm<102030>"
+            host=os.getenv("DB_HOST"),
+            port=os.getenv("DB_PORT"),
+            database=os.getenv("DB_NAME"),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD")
         )
         return conn
     except Exception as e:
         st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
-
-# Função para inserir os dados na tabela kpm_spread_table
-def inserir_dados(conn, data, agente, moeda, valor, abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho):
-    try:
-        cursor = conn.cursor()
-        insert_query = sql.SQL("""
-            INSERT INTO kpm_spread_table (data, agente, moeda, valor, abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """)
-        cursor.execute(insert_query, (data, agente, moeda, valor, abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho))
-        conn.commit()
-        st.success("Dados inseridos com sucesso!")
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao inserir dados: {e}")
-    finally:
-        cursor.close()
-
-# Função para atualizar os dados na tabela kpm_spread_table
-def atualizar_dados(conn, id_registro, data, agente, moeda, valor, abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho):
-    try:
-        cursor = conn.cursor()
-        update_query = sql.SQL("""
-            UPDATE kpm_spread_table
-            SET data = %s, agente = %s, moeda = %s, valor = %s, abs_valor = %s, conversao = %s, taxa_rec_cliente = %s, taxa_pgto_banco = %s, fator_conversao = %s, ganho = %s
-            WHERE id = %s
-        """)
-        cursor.execute(update_query, (data, agente, moeda, float(valor), abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho, int(id_registro)))
-        conn.commit()
-        st.success("Dados atualizados com sucesso!")
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao atualizar dados: {e}")
-    finally:
-        cursor.close()
-
-# Função para excluir um registro
-def excluir_dados(conn, id_registro):
-    try:
-        cursor = conn.cursor()
-        delete_query = sql.SQL("DELETE FROM kpm_spread_table WHERE id = %s")
-        cursor.execute(delete_query, (int(id_registro),))  # Converter para int para evitar erro
-        conn.commit()
-        st.success("Registro excluído com sucesso!")
-    except Exception as e:
-        conn.rollback()
-        st.error(f"Erro ao excluir dados: {e}")
-    finally:
-        cursor.close()
-
-# Função para realizar o SELECT e mostrar os dados
-def exibir_dados(conn):
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM kpm_spread_table")
-        rows = cursor.fetchall()
-        colunas = [desc[0] for desc in cursor.description]  # Nome das colunas
-        df = pd.DataFrame(rows, columns=colunas)
-        return df
-    except Exception as e:
-        st.error(f"Erro ao buscar dados: {e}")
-    finally:
-        cursor.close()
 
 # Função para calcular os campos necessários
 def calcular_campos(valor, taxa_rec_cliente, taxa_pgto_banco):
@@ -173,89 +89,148 @@ def calcular_campos(valor, taxa_rec_cliente, taxa_pgto_banco):
     ganho = fator_conversao * abs_valor
     return abs_valor, conversao, fator_conversao, ganho
 
-# Função principal para exibir o formulário e os dados
-def main_page():
-    st.title("Formulário SPREAD - KPM")
+# Função para inserir os dados da planilha Excel no banco de dados
+def inserir_dados_excel(conn, df):
+    try:
+        cursor = conn.cursor()
+        for index, row in df.iterrows():
+            abs_valor, conversao, fator_conversao, ganho = calcular_campos(row['valor'], row['taxa_rec_cliente'], row['taxa_pgto_banco'])
+            insert_query = sql.SQL("""
+                INSERT INTO kpm_spread_table (ref_kpm, data, agente, moeda, valor, abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """)
+            cursor.execute(insert_query, (
+                row['ref_kpm'],
+                row['data'],
+                row['agente'],
+                row['moeda'],
+                row['valor'],
+                abs_valor,
+                conversao,
+                row['taxa_rec_cliente'],
+                row['taxa_pgto_banco'],
+                fator_conversao,
+                ganho
+            ))
+        conn.commit()
+        st.success("Dados da planilha inseridos com sucesso!")
+    except Exception as e:
+        conn.rollback()
+        st.error(f"Erro ao inserir dados: {e}")
+    finally:
+        cursor.close()
 
-    # Conectando ao banco de dados
-    conn = conectar_bd()
+# Função para processar o Excel e corrigir os nomes das colunas
+def processar_excel(file):
+    df = pd.read_excel(file)
 
-    if conn:
-        # Formulário de inserção e edição
-        with st.form(key='form'):
-            data_str = st.text_input("Informe a DATA (dd/mm/aaaa)", placeholder="dd/mm/aaaa")
-            agente = st.text_input("Informe o AGENTE")
-            moeda = st.text_input("Informe a MOEDA")
-            valor = st.number_input("Informe o VALOR", min_value=0.0, format="%.2f")
-            taxa_rec_cliente = st.number_input("Informe a TAXA REC. CLIENTE", value=0.0000, format="%.4f")
-            taxa_pgto_banco = st.number_input("Informe a TAXA PGTO BANCO", value=0.0000, format="%.4f")
-            
-            submit_button = st.form_submit_button(label="Salvar")
-            
-            # Converter a data fornecida
-            data = converter_data(data_str)
+    # Padroniza as colunas para garantir que todos os nomes sejam tratados corretamente
+    df.columns = df.columns.str.strip()
 
-            if submit_button:
-                if data and agente and moeda:
-                    abs_valor, conversao, fator_conversao, ganho = calcular_campos(valor, taxa_rec_cliente, taxa_pgto_banco)
-                    inserir_dados(conn, data.strftime('%Y-%m-%d'), agente, moeda, valor, abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho)
-                    # Força a atualização da página
-                    st.query_params.from_dict({"updated": "True"})
-    
-        # Campo de filtro de ID abaixo do formulário
-        filtro_id = st.text_input("Filtrar pelo ID", placeholder="Informe o ID para editar ou excluir")
-        
-        # Exibindo os dados salvos e capturando o DataFrame
-        df = exibir_dados(conn)
-        registro_para_editar = None
-        
-        if filtro_id:
-            filtro_id = int(filtro_id)
-            registro_para_editar = df[df['id'] == filtro_id]
-            if registro_para_editar.empty:
-                st.error(f"Nenhum registro encontrado para o ID {filtro_id}")
-                registro_para_editar = None
+    # Gera um ID para cada linha
+    df['id'] = df.index + 1
+
+    # Reorganiza a coluna 'id' para ser a primeira
+    colunas = ['id'] + [col for col in df.columns if col != 'id']
+    df = df[colunas]
+
+    # Mapeia os nomes das colunas do Excel para os nomes esperados pelo banco de dados
+    colunas_mapeamento = {
+        'REF.': 'ref_kpm',
+        'DATA': 'data',
+        'AGENTE': 'agente',
+        'MOEDA': 'moeda',
+        'VALOR': 'valor',
+        'ABS': 'abs_valor',
+        'Conversão': 'conversao',
+        'TAXA REC CLIENTE': 'taxa_rec_cliente',
+        'TAXA PAGA AO BANCO': 'taxa_pgto_banco',
+        'FATOR CONVERSÃO': 'fator_conversao',
+        'GANHO R$': 'ganho'
+    }
+
+    # Renomeia as colunas do DataFrame com base no mapeamento
+    df.rename(columns=colunas_mapeamento, inplace=True)
+
+    # Verifica se as colunas necessárias estão presentes
+    colunas_necessarias = ['id', 'ref_kpm', 'data', 'agente', 'moeda', 'valor']
+    if not all(coluna in df.columns for coluna in colunas_necessarias):
+        st.error(f"Erro: As colunas necessárias não foram encontradas no arquivo Excel.")
+        st.write("Colunas encontradas:", df.columns)
+        return
+
+    # Salva o DataFrame no session_state para preservar as edições
+    if 'df' not in st.session_state or st.session_state['df'].empty:
+        st.session_state['df'] = df.copy()  # Armazena o dataframe no session_state
+
+    # Exibe a planilha para o usuário revisar com o campo "id"
+    st.write("Pré-visualização dos dados carregados:")
+    st.dataframe(st.session_state['df'])  # Exibe o dataframe do session_state
+
+    # Permite ao usuário selecionar um intervalo de linhas ou uma linha única
+    linhas_selecionadas = st.text_input("Informe as linhas que deseja editar (ex: 2 ou 3;4):")
+    if linhas_selecionadas:
+        try:
+            if ";" in linhas_selecionadas:
+                inicio, fim = map(int, linhas_selecionadas.split(";"))
+                linhas_validas = list(range(inicio, fim + 1))
             else:
-                registro_para_editar = registro_para_editar.iloc[0]
+                linhas_validas = [int(linhas_selecionadas.strip())]
 
-        if registro_para_editar is not None:
-            with st.form(key='edit_form'):
-                data_str = st.text_input("Informe a DATA (dd/mm/aaaa)", value=formatar_data_para_formulario(registro_para_editar['data']), placeholder="dd/mm/aaaa")
-                agente = st.text_input("Informe o AGENTE", value=registro_para_editar['agente'])
-                moeda = st.text_input("Informe a MOEDA", value=registro_para_editar['moeda'])
-                valor = st.number_input("Informe o VALOR", min_value=0.0, format="%.2f", value=float(registro_para_editar['valor']))
-                taxa_rec_cliente = st.number_input("Informe a TAXA REC. CLIENTE", value=float(registro_para_editar['taxa_rec_cliente']), format="%.4f")
-                taxa_pgto_banco = st.number_input("Informe a TAXA PGTO BANCO", value=float(registro_para_editar['taxa_pgto_banco']), format="%.4f")
-                
-                editar_button = st.form_submit_button(label="Editar")
-                excluir_button = st.form_submit_button(label="Excluir")
+            if not linhas_validas:
+                st.warning("Nenhuma linha válida selecionada.")
+                return
+        except ValueError:
+            st.error("Por favor, insira apenas números válidos.")
+            return
 
-                data = converter_data(data_str)
+        # Exibe as linhas selecionadas
+        st.write(f"Linhas selecionadas para edição: {linhas_validas}")
+        st.dataframe(st.session_state['df'][st.session_state['df']['id'].isin(linhas_validas)])
 
-                if editar_button:
-                    if data and agente and moeda:
-                        abs_valor, conversao, fator_conversao, ganho = calcular_campos(valor, taxa_rec_cliente, taxa_pgto_banco)
-                        atualizar_dados(conn, registro_para_editar['id'], data.strftime('%Y-%m-%d'), agente, moeda, valor, abs_valor, conversao, taxa_rec_cliente, taxa_pgto_banco, fator_conversao, ganho)
-                        st.query_params.from_dict({"updated": "True"})
-                    
-                if excluir_button:
-                    excluir_dados(conn, registro_para_editar['id'])
-                    st.query_params.from_dict({"updated": "True"})
+        # Permite a edição das taxas
+        taxa_rec_cliente = st.number_input("Informe a TAXA REC CLIENTE para as linhas selecionadas", min_value=0.0, format="%.4f")
+        taxa_pgto_banco = st.number_input("Informe a TAXA PAGA AO BANCO para as linhas selecionadas", min_value=0.0, format="%.4f")
 
-        st.write("Tabela de registros")
-        st.dataframe(df)
+        if st.button("Aplicar taxas e calcular"):
+            for linha in linhas_validas:
+                st.session_state['df'].loc[st.session_state['df']['id'] == linha, 'taxa_rec_cliente'] = taxa_rec_cliente
+                st.session_state['df'].loc[st.session_state['df']['id'] == linha, 'taxa_pgto_banco'] = taxa_pgto_banco
 
-        conn.close()
+            # Calcula os campos antes do insert
+            for index, row in st.session_state['df'].iterrows():
+                abs_valor, conversao, fator_conversao, ganho = calcular_campos(row['valor'], row['taxa_rec_cliente'], row['taxa_pgto_banco'])
+                st.session_state['df'].at[index, 'abs_valor'] = abs_valor
+                st.session_state['df'].at[index, 'conversao'] = conversao
+                st.session_state['df'].at[index, 'fator_conversao'] = fator_conversao
+                st.session_state['df'].at[index, 'ganho'] = ganho
+
+            st.success(f"Taxas aplicadas e cálculos realizados para as linhas {', '.join(map(str, linhas_validas))}")
+            st.write("Dados atualizados com cálculos:")
+            st.dataframe(st.session_state['df'])  # Mostra os dados com cálculos atualizados
+
+    # Exibe o botão para salvar os dados no banco de dados
+    if st.button('Salvar dados'):
+        conn = conectar_bd()
+        if conn:
+            inserir_dados_excel(conn, st.session_state['df'])
+            conn.close()
+
+# Função principal para a página principal
+def main_page():
+    st.title("Controle de Spread - KPM Logistics")
+    uploaded_file = st.file_uploader("Escolha um arquivo Excel", type="xlsx")
+    if uploaded_file:
+        processar_excel(uploaded_file)
 
 # Gerencia as páginas do aplicativo
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
-if 'page' not in st.session_state:
-    st.session_state['page'] = 'login'
+check_login_from_url()
 
 if st.session_state['logged_in']:
-    add_logo()  # Adiciona a logo ao topo da página
+    add_logo()
     main_page()
 else:
     login_page()
