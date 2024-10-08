@@ -136,18 +136,19 @@ def processar_excel(file):
     # Lê todas as abas do Excel
     xls = pd.ExcelFile(file)
     
-    # Verifica se há pelo menos duas abas
-    if len(xls.sheet_names) < 2:
-        st.error("O arquivo Excel deve conter pelo menos duas abas.")
+    # Verifica o número de abas e carrega a(s) aba(s) adequadamente
+    if len(xls.sheet_names) == 1:
+        df1 = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+        df2 = None  # Define df2 como None quando houver apenas uma aba
+    elif len(xls.sheet_names) >= 2:
+        df1 = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+        df2 = pd.read_excel(xls, sheet_name=xls.sheet_names[1])
+    else:
+        st.error("O arquivo Excel deve conter pelo menos uma aba.")
         return None, None
-
-    # Carrega a primeira e segunda abas
-    df1 = pd.read_excel(xls, sheet_name=xls.sheet_names[0])
-    df2 = pd.read_excel(xls, sheet_name=xls.sheet_names[1])
 
     # Padroniza as colunas da primeira aba
     df1.columns = df1.columns.str.strip()
-    df2.columns = df2.columns.str.strip()
 
     # Mapeia os nomes das colunas do Excel para os nomes esperados pelo banco de dados
     colunas_mapeamento = {
@@ -164,26 +165,31 @@ def processar_excel(file):
         'GANHO R$': 'ganho'
     }
 
-    # Renomeia as colunas de ambas as abas com base no mapeamento
+    # Renomeia as colunas de df1
     df1.rename(columns=colunas_mapeamento, inplace=True)
-    df2.rename(columns=colunas_mapeamento, inplace=True)
 
-    # Tratar valores numéricos inválidos
+    # Tratar valores numéricos inválidos na primeira aba
     colunas_numericas = ['valor', 'abs_valor', 'conversao', 'taxa_rec_cliente', 'taxa_pgto_banco', 'fator_conversao', 'ganho']
     df1 = tratar_valores_numericos(df1, colunas_numericas)
-    df2 = tratar_valores_numericos(df2, colunas_numericas)
-
-    # Substitui valores NaN e NaT
     df1 = tratar_valores_invalidos(df1)
-    df2 = tratar_valores_invalidos(df2)
 
-    # Verifica se as colunas necessárias estão presentes
+    # Se houver df2 (ou seja, mais de uma aba), processa-o também
+    if df2 is not None:
+        df2.columns = df2.columns.str.strip()
+        df2.rename(columns=colunas_mapeamento, inplace=True)
+
+        # Tratar valores numéricos inválidos em df2
+        df2 = tratar_valores_numericos(df2, colunas_numericas)
+        df2 = tratar_valores_invalidos(df2)
+
+    # Verifica se as colunas necessárias estão presentes na primeira aba
     colunas_necessarias = ['ref_kpm', 'data', 'agente', 'moeda', 'valor']
     if not all(coluna in df1.columns for coluna in colunas_necessarias):
         st.error(f"Erro: As colunas necessárias não foram encontradas na primeira aba.")
         return None, None
 
-    if not all(coluna in df2.columns for coluna in colunas_necessarias):
+    # Se houver df2, verifica também suas colunas
+    if df2 is not None and not all(coluna in df2.columns for coluna in colunas_necessarias):
         st.error(f"Erro: As colunas necessárias não foram encontradas na segunda aba.")
         return None, None
 
@@ -195,15 +201,17 @@ def main_page():
     uploaded_file = st.file_uploader("Escolha um arquivo Excel", type="xlsx")
     if uploaded_file:
         df1, df2 = processar_excel(uploaded_file)
-        if df1 is not None and df2 is not None:
-            # Exibe as duas abas em tabelas diferentes
+        if df1 is not None:
+            # Exibe a primeira aba em uma tabela
             st.write("Pré-visualização dos dados da primeira aba:")
             st.dataframe(df1)
-            
-            st.write("Pré-visualização dos dados da segunda aba:")
-            st.dataframe(df2)
 
-            # Exibe o botão para salvar os dados no banco de dados (ambas as abas)
+            # Se houver uma segunda aba, exibe-a também
+            if df2 is not None:
+                st.write("Pré-visualização dos dados da segunda aba:")
+                st.dataframe(df2)
+
+            # Exibe o botão para salvar os dados no banco de dados (para ambas as abas)
             if st.button('Salvar dados'):
                 conn = conectar_bd()
                 if conn:
@@ -213,9 +221,12 @@ def main_page():
                     max_id = cursor.fetchone()[0]  # Obter o maior ID
                     cursor.close()
 
-                    # Inicia a inserção das duas abas
-                    inserir_dados_excel(conn, df1, max_id + 1)  # Inserir primeira aba
-                    inserir_dados_excel(conn, df2, max_id + len(df1) + 1)  # Inserir segunda aba, após a primeira
+                    # Inicia a inserção da primeira aba
+                    inserir_dados_excel(conn, df1, max_id + 1)
+
+                    # Se houver uma segunda aba, insere também
+                    if df2 is not None:
+                        inserir_dados_excel(conn, df2, max_id + len(df1) + 1)
 
                     conn.close()
 
