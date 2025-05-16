@@ -6,7 +6,6 @@ import pandas as pd
 import json
 import base64
 import numpy as np
-from dotenv import load_dotenv
 
 # Função para converter a imagem em base64
 def get_base64_image(image_path):
@@ -47,10 +46,10 @@ def login_page():
     users = load_users()
     usernames = [user['username'] for user in users]
 
-    username = st.text_input("Usuário")
-    password = st.text_input("Senha", type="password")
+    username = st.text_input("Usuário", key="spread_login_username")
+    password = st.text_input("Senha", type="password", key="spread_login_password")
 
-    if st.button("Entrar"):
+    if st.button("Entrar", key="spread_login_button"):
         if username in usernames:
             user = next(user for user in users if user['username'] == username)
             if user['password'] == password:
@@ -62,19 +61,16 @@ def login_page():
         else:
             st.error("Usuário não encontrado")
 
-load_dotenv()  
-
 # Função para conectar ao banco de dados PostgreSQL
 def conectar_bd():
     try:
         conn = psycopg2.connect(
-            host=os.getenv("POSTGRES_HOST"),
-            port=os.getenv("POSTGRES_PORT"),
-            database=os.getenv("POSTGRES_DB"),
-            user=os.getenv("POSTGRES_USER"),
-            password=os.getenv("POSTGRES_PASSWORD")
+            host=st.secrets["POSTGRES_HOST"],
+            port=st.secrets["POSTGRES_PORT"],
+            database=st.secrets["POSTGRES_DB"],
+            user=st.secrets["POSTGRES_USER"],
+            password=st.secrets["POSTGRES_PASSWORD"]
         )
-        
         return conn
     except Exception as e:
         st.error("Erro ao conectar ao banco de dados.")
