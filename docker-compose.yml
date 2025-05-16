@@ -1,0 +1,14 @@
+services:
+  streamlit:
+    container_name: sync-database
+    build:
+      context: ./  
+      dockerfile: Dockerfile 
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/app
+    environment:
+      - STREAMLIT_SERVER_PORT=8501
+      - PYTHONUNBUFFERED=1
+    command: streamlit run spread.py
